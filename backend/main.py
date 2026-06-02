@@ -439,28 +439,59 @@ async def ws_price(ws: WebSocket, ticker: str):
         ws_manager.disconnect(ws, ticker)
 
 # ── Serve Next.js static build ────────────────────────────────────────────────
-# The Next.js `out/` folder (static export) is placed at ../frontend/out
-# FastAPI serves it so we only need ONE Render service.
+# Next.js exports to frontend/out/
+# We mount the ENTIRE out/ directory so _next/static CSS+JS chunks load correctly.
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "out")
 
 if os.path.isdir(STATIC_DIR):
-    # Mount _next (JS/CSS chunks)
-    app.mount("/_next", StaticFiles(directory=os.path.join(STATIC_DIR, "_next")), name="next-assets")
+    log.info(f"Serving static build from {STATIC_DIR}")
 
+    # Mount ALL static assets (JS, CSS, images, fonts, _next chunks, etc.)
+    # This must come BEFORE the catch-all route.
+    app.mount("/static", StaticFiles(directory=os.path.join(STATIC_DIR, "static")), name="static") if os.path.isdir(os.path.join(STATIC_DIR, "static")) else None
+
+    # Mount _next directory (CSS/JS chunks from Next.js build)
+    _next_dir = os.path.join(STATIC_DIR, "_next")
+    if os.path.isdir(_next_dir):
+        app.mount("/_next", StaticFiles(directory=_next_dir), name="next-static")
+
+    # Serve any other static files in the root of out/ (favicon, robots.txt etc)
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        """Catch-all — serve Next.js pages or index.html for SPA routing."""
-        candidate = os.path.join(STATIC_DIR, full_path)
-        if os.path.isfile(candidate):
-            return FileResponse(candidate)
-        # Try .html variant (Next.js static export naming)
-        html_candidate = candidate + ".html"
-        if os.path.isfile(html_candidate):
-            return FileResponse(html_candidate)
-        # Fallback to index
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+        """
+        Catch-all route — serves Next.js pages.
+        Order of resolution:
+          1. Exact file match          (e.g. favicon.ico)
+          2. <path>.html               (Next.js static export naming)
+          3. <path>/index.html         (directory index)
+          4. index.html                (SPA fallback)
+        """
+        # Never intercept API or WebSocket routes
+        if full_path.startswith("api/") or full_path.startswith("ws/"):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        base = STATIC_DIR
+
+        # 1. Exact file
+        exact = os.path.join(base, full_path)
+        if os.path.isfile(exact):
+            return FileResponse(exact)
+
+        # 2. .html variant
+        html = exact + ".html"
+        if os.path.isfile(html):
+            return FileResponse(html)
+
+        # 3. directory/index.html
+        dir_index = os.path.join(base, full_path, "index.html")
+        if os.path.isfile(dir_index):
+            return FileResponse(dir_index)
+
+        # 4. root index.html
+        return FileResponse(os.path.join(base, "index.html"))
+
 else:
-    log.warning(f"Static build not found at {STATIC_DIR} — API-only mode")
+    log.warning(f"Static build not found at {STATIC_DIR} — running in API-only mode")
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
