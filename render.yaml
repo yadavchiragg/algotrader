@@ -1,0 +1,31 @@
+services:
+  # ── Single Web Service: FastAPI serves API + Next.js static build ──
+  - type: web
+    name: algotrader
+    runtime: python
+    region: oregon
+    plan: free
+
+    # Render runs this from the repo root
+    buildCommand: |
+      # Install Node (Render has it by default)
+      cd frontend && npm ci && npm run build && cd ..
+      pip install -r backend/requirements.txt
+
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: DATABASE_URL
+        # Set this in Render dashboard after creating a PostgreSQL database
+        # Value: your Internal Database URL from Render Postgres
+        value: REPLACE_WITH_YOUR_POSTGRES_INTERNAL_URL
+
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+
+  # ── PostgreSQL database ──
+  - type: pserv
+    name: algotrader-db
+    runtime: postgres
+    plan: free
+    region: oregon

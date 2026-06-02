@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #0a0e17;
+  color: #e2e8f0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0a0e17; }
+::-webkit-scrollbar-thumb { background: #1e2d40; border-radius: 2px; }
+::selection { background: rgba(0,255,136,.15); }
+
+/* TradingView chart container */
+.tv-chart { width: 100%; height: 380px; }
+
+/* Ticker tape */
+.ticker-tape { animation: marquee 50s linear infinite; }
+.ticker-tape:hover { animation-play-state: paused; }
+
+/* Price flash */
+.flash-up   { animation: flashGreen .6s ease-out; color: #00ff88; }
+.flash-down { animation: flashRed .6s ease-out;   color: #ff4466; }
+
+/* Live dot blink */
+.live-dot { animation: blink 1.2s step-end infinite; }
