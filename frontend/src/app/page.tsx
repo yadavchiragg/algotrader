@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 
 // Dynamic import — lightweight-charts is browser-only
-const TradingChart = lazy(() => import("../../components/TradingChart"));
+const TradingChart = lazy(() => import("../components/TradingChart"));
 
 // ── API base: same origin on Render (single service), override via env locally ──
 const API = process.env.NEXT_PUBLIC_API_URL ?? "";
