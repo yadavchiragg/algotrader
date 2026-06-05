@@ -6,28 +6,38 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  background: #0a0e17;
+  background-color: #0a0e17;
   color: #e2e8f0;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: #0a0e17; }
 ::-webkit-scrollbar-thumb { background: #1e2d40; border-radius: 2px; }
-::selection { background: rgba(0,255,136,.15); }
+::-webkit-scrollbar-thumb:hover { background: #2d4a6a; }
+::selection { background: rgba(0,255,136,0.15); color: #00ff88; }
 
-/* TradingView chart container */
-.tv-chart { width: 100%; height: 380px; }
-
-/* Ticker tape */
-.ticker-tape { animation: marquee 50s linear infinite; }
+.ticker-tape { animation: marquee 50s linear infinite; will-change: transform; }
 .ticker-tape:hover { animation-play-state: paused; }
 
-/* Price flash */
-.flash-up   { animation: flashGreen .6s ease-out; color: #00ff88; }
-.flash-down { animation: flashRed .6s ease-out;   color: #ff4466; }
+.flash-green { animation: flashGreen 0.6s ease-out; }
+.flash-red   { animation: flashRed   0.6s ease-out; }
+.live-blink  { animation: blink 1.2s step-end infinite; }
 
-/* Live dot blink */
-.live-dot { animation: blink 1.2s step-end infinite; }
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes blink {
+  0%,100% { opacity: 1; }
+  50%     { opacity: 0.15; }
+}
+@keyframes flashGreen {
+  0%   { background-color: rgba(0,255,136,0.2); }
+  100% { background-color: transparent; }
+}
+@keyframes flashRed {
+  0%   { background-color: rgba(255,68,102,0.2); }
+  100% { background-color: transparent; }
+}
