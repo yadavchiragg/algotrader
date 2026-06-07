@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AlgoTrader — Live SMA Crossover Engine</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0a0e17;color:#e2e8f0;font-family:'JetBrains Mono',monospace;font-size:12px;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0a0e17}
+::-webkit-scrollbar-thumb{background:#1e2d40;border-radius:2px}
+::selection{background:rgba(0,255,136,.15)}
+
+/* Layout */
+.tape{height:28px;background:#080c14;border-bottom:1px solid #1e2d40;overflow:hidden;display:flex;align-items:center}
+.tape-inner{display:flex;white-space:nowrap;animation:marquee 60s linear infinite}
+.tape-inner:hover{animation-play-state:paused}
+@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.tape-item{display:inline-flex;align-items:center;gap:6px;padding:0 16px;font-size:10px}
+
+header{background:#0d1220;border-bottom:1px solid #1e2d40;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.logo{color:#00ff88;font-weight:700;letter-spacing:3px;font-size:13px}
+.header-info{color:#4a5568;font-size:10px}
+.live-dot{width:8px;height:8px;background:#00ff88;border-radius:50%;display:inline-block;animation:blink 1.2s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+
+main{max-width:1600px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
+.card{background:#111827;border:1px solid #1e2d40;border-radius:3px;padding:16px;border-left:2px solid}
+.card-label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#4a5568;margin-bottom:6px}
+.card-value{font-size:20px;font-weight:700;margin-bottom:4px}
+.card-sub{font-size:10px;color:#4a5568}
+.c-blue{border-left-color:#00aaff}.c-blue .card-value{color:#00aaff}
+.c-green{border-left-color:#00ff88}.c-green .card-value{color:#00ff88}
+.c-red{border-left-color:#ff4466}.c-red .card-value{color:#ff4466}
+.c-yellow{border-left-color:#ffd700}.c-yellow .card-value{color:#ffd700}
+
+/* Main grid */
+.main-grid{display:grid;grid-template-columns:220px 1fr;gap:16px}
+@media(max-width:1000px){.main-grid{grid-template-columns:1fr}}
+
+/* Stock list */
+.stock-list{background:#111827;border:1px solid #1e2d40;border-radius:3px;display:flex;flex-direction:column;max-height:560px}
+.stock-search{padding:10px;border-bottom:1px solid #1e2d40}
+.stock-search input{width:100%;background:#0a0e17;border:1px solid #1e2d40;border-radius:3px;padding:6px 10px;color:#e2e8f0;font-family:inherit;font-size:11px;outline:none}
+.stock-search input:focus{border-color:rgba(0,170,255,.5)}
+.stock-scroll{overflow-y:auto;flex:1}
+.stock-item{width:100%;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,45,64,.4);cursor:pointer;background:none;border-left:none;text-align:left;transition:background .15s;font-family:inherit}
+.stock-item:hover{background:#1a2535}
+.stock-item.active{background:#1a2535;border-left:2px solid #00ff88}
+.stock-ticker{color:#00aaff;font-weight:700;font-size:11px}
+.stock-name{color:#4a5568;font-size:9px;margin-top:1px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stock-price{font-weight:700;font-size:11px;text-align:right}
+.stock-chg{font-size:9px;text-align:right}
+.up{color:#00ff88}.down{color:#ff4466}
+
+/* Chart panel */
+.chart-panel{background:#111827;border:1px solid #1e2d40;border-radius:3px;display:flex;flex-direction:column}
+.chart-toolbar{padding:10px 16px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.chart-ticker{color:#00aaff;font-weight:700;font-size:14px}
+.chart-price{font-weight:700;font-size:16px;transition:color .2s}
+.chart-chg{font-weight:700;font-size:11px}
+.chart-name{color:#4a5568;font-size:10px}
+.sim-badge{font-size:9px;color:#ffd700;border:1px solid rgba(255,215,0,.3);padding:2px 6px;border-radius:2px}
+.periods{display:flex;gap:4px}
+.period-btn{padding:4px 10px;font-family:inherit;font-size:10px;font-weight:700;border:1px solid transparent;border-radius:2px;cursor:pointer;background:none;color:#4a5568;transition:all .15s}
+.period-btn:hover{color:#e2e8f0}
+.period-btn.active{color:#00aaff;background:rgba(0,170,255,.12);border-color:rgba(0,170,255,.4)}
+#chart-container{width:100%;height:400px;background:#111827}
+.chart-legend{padding:8px 16px;border-top:1px solid #1e2d40;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:9px;color:#4a5568}
+.legend-line{width:20px;height:2px;border-radius:1px}
+.legend-box{width:12px;height:12px;border-radius:2px}
+.live-label{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:9px;color:#4a5568}
+
+/* Strategy button */
+.strategy-bar{padding:12px 16px;border-top:1px solid #1e2d40;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.btn-strategy{padding:10px 24px;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:1px solid #00ff88;color:#00ff88;background:none;border-radius:3px;cursor:pointer;transition:all .2s}
+.btn-strategy:hover{background:rgba(0,255,136,.1);box-shadow:0 0 20px rgba(0,255,136,.15)}
+.btn-strategy:disabled{border-color:#1e2d40;color:#4a5568;cursor:not-allowed;box-shadow:none}
+.strategy-msg{font-size:10px;color:#4a5568;max-width:400px}
+
+/* Bottom grid */
+.bottom-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media(max-width:900px){.bottom-grid{grid-template-columns:1fr}}
+
+/* Ledger */
+.panel{background:#111827;border:1px solid #1e2d40;border-radius:3px;overflow:hidden}
+.panel-header{padding:10px 16px;border-bottom:1px solid #1e2d40;display:flex;justify-content:space-between;align-items:center}
+.panel-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#4a5568}
+.panel-count{font-size:9px;color:#4a5568}
+.empty{padding:40px;text-align:center;color:#4a5568}
+table{width:100%;border-collapse:collapse}
+th{padding:8px 12px;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#4a5568;border-bottom:1px solid #1e2d40;text-align:left;white-space:nowrap}
+th.r,td.r{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid rgba(30,45,64,.3);font-size:10px;white-space:nowrap}
+tr:hover td{background:#1a2535}
+.badge{padding:2px 8px;font-size:9px;font-weight:700;border-radius:2px}
+.badge-buy{background:rgba(0,255,136,.1);color:#00ff88}
+.badge-sell{background:rgba(255,68,102,.1);color:#ff4466}
+.pnl-pos{color:#00ff88;font-weight:700}
+.pnl-neg{color:#ff4466;font-weight:700}
+.muted{color:#4a5568}
+
+/* Log */
+.log-scroll{overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px;max-height:300px}
+.log-entry{font-size:10px;line-height:1.5}
+.log-error{color:#ff4466}
+.log-success{color:#00ff88}
+.log-info{color:#00aaff}
+.log-muted{color:#4a5568}
+
+/* Info panels */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.info-grid{grid-template-columns:1fr}}
+.info-section{background:#111827;border:1px solid #1e2d40;border-radius:3px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.info-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#4a5568;padding-bottom:8px;border-bottom:1px solid #1e2d40}
+.sma-item{display:flex;align-items:flex-start;gap:10px}
+.sma-line{width:24px;height:2px;border-radius:1px;margin-top:8px;flex-shrink:0}
+.sma-label{font-weight:700;font-size:11px;color:#e2e8f0;margin-bottom:3px}
+.sma-desc{font-size:10px;color:#4a5568;line-height:1.5}
+.signal-box{border-radius:3px;padding:10px;display:flex;gap:10px;align-items:flex-start}
+.signal-badge{font-size:9px;font-weight:700;padding:2px 8px;border-radius:2px;flex-shrink:0;margin-top:1px}
+.signal-title{font-weight:700;font-size:11px;color:#e2e8f0;margin-bottom:3px}
+.signal-desc{font-size:10px;color:#4a5568;line-height:1.5}
+.tip{background:#0a0e17;border:1px solid #1e2d40;border-radius:3px;padding:10px;font-size:10px;color:#4a5568;line-height:1.6}
+.metric-box{border-radius:3px;padding:12px;border:1px solid}
+.metric-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.metric-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.metric-label{font-weight:700;font-size:11px}
+.metric-tag{font-size:9px;color:#4a5568;margin-left:auto}
+.metric-desc{font-size:10px;color:#4a5568;line-height:1.6}
+
+/* Error banner */
+.error-banner{background:rgba(255,68,102,.05);border:1px solid rgba(255,68,102,.3);border-radius:3px;padding:10px 16px;color:#ff4466;font-size:11px;display:flex;justify-content:space-between;align-items:center}
+.error-close{background:none;border:none;color:#4a5568;cursor:pointer;font-size:14px;padding:0 4px}
+.error-close:hover{color:#ff4466}
+.hidden{display:none}
+
+/* Spinner */
+.spinner{width:14px;height:14px;border:2px solid #1e2d40;border-top-color:#00aaff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Flash */
+@keyframes flashG{0%{background:rgba(0,255,136,.15)}100%{background:transparent}}
+@keyframes flashR{0%{background:rgba(255,68,102,.15)}100%{background:transparent}}
+.flash-g{animation:flashG .6s ease-out}
+.flash-r{animation:flashR .6s ease-out}
+
+/* Reset btn */
+.btn-reset{background:none;border:1px solid #1e2d40;color:#4a5568;font-family:inherit;font-size:10px;padding:6px 14px;border-radius:2px;cursor:pointer;letter-spacing:1px;text-transform:uppercase}
+.btn-reset:hover{border-color:rgba(255,68,102,.4);color:#ff4466}
+
+/* Signal badge header */
+.sig-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;font-size:9px;font-weight:700;border-radius:2px;border:1px solid}
+.sig-buy{color:#00ff88;border-color:rgba(0,255,136,.4);background:rgba(0,255,136,.1)}
+.sig-sell{color:#ff4466;border-color:rgba(255,68,102,.4);background:rgba(255,68,102,.1)}
+.sig-hold{color:#ffd700;border-color:rgba(255,215,0,.4);background:rgba(255,215,0,.1)}
+.sig-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1s step-end infinite}
+</style>
+</head>
+<body>
+
+<!-- Ticker tape -->
+<div class="tape"><div class="tape-inner" id="tape">Loading market data…</div></div>
+
+<!-- Header -->
+<header>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span class="live-dot"></span>
+    <span class="logo">AlgoTrader</span>
+    <span style="color:#1e2d40">//</span>
+    <span class="header-info" id="header-info">AAPL · SMA 5/20 · 3mo</span>
+    <span id="sig-display" class="hidden"></span>
+  </div>
+  <button class="btn-reset" onclick="resetAccount()">RESET</button>
+</header>
+
+<main>
+  <!-- Error banner -->
+  <div id="error-banner" class="error-banner hidden">
+    <span id="error-msg"></span>
+    <button class="error-close" onclick="hideError()">✕</button>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="cards">
+    <div class="card c-blue">
+      <div class="card-label">Cash Balance</div>
+      <div class="card-value" id="card-cash">$10,000.00</div>
+      <div class="card-sub">Available to deploy</div>
+    </div>
+    <div class="card c-green">
+      <div class="card-value" id="card-portfolio">$10,000.00</div>
+      <div class="card-label">Portfolio Value</div>
+      <div class="card-sub" id="card-shares">0 shares held</div>
+    </div>
+    <div class="card" id="card-pnl" style="border-left-color:#00ff88">
+      <div class="card-label">Total PnL</div>
+      <div class="card-value" id="card-pnl-val" style="color:#00ff88">$0.00</div>
+      <div class="card-sub">vs $10,000 starting capital</div>
+    </div>
+    <div class="card c-yellow" id="card-live">
+      <div class="card-label" id="card-live-label">Live Price · AAPL</div>
+      <div class="card-value" id="card-live-val">—</div>
+      <div class="card-sub" id="card-live-sub">ticks every 2s via WebSocket</div>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+    <!-- Stock list -->
+    <div class="stock-list">
+      <div class="stock-search">
+        <input type="text" id="search-input" placeholder="Search: AAPL, TSLA, NVDA…" oninput="onSearch(this.value)"/>
+      </div>
+      <div class="stock-scroll" id="stock-scroll">
+        <div class="empty">Loading quotes…</div>
+      </div>
+    </div>
+
+    <!-- Chart panel -->
+    <div class="chart-panel">
+      <div class="chart-toolbar">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="chart-ticker" id="ct-ticker">AAPL</span>
+          <span class="chart-price" id="ct-price">—</span>
+          <span class="chart-chg" id="ct-chg"></span>
+          <span class="chart-name" id="ct-name"></span>
+          <span id="ct-sim" class="sim-badge hidden">SIM</span>
+          <span id="ct-spinner" class="spinner hidden"></span>
+          <span class="live-label"><span class="live-dot" style="width:6px;height:6px"></span>LIVE</span>
+        </div>
+        <div class="periods">
+          <button class="period-btn" onclick="setPeriod('1mo',this)">1M</button>
+          <button class="period-btn active" onclick="setPeriod('3mo',this)">3M</button>
+          <button class="period-btn" onclick="setPeriod('6mo',this)">6M</button>
+          <button class="period-btn" onclick="setPeriod('1y',this)">1Y</button>
+          <button class="period-btn" onclick="setPeriod('2y',this)">2Y</button>
+        </div>
+      </div>
+      <div id="chart-container"></div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-line" style="background:#00aaff"></div>Fast SMA (5)</div>
+        <div class="legend-item"><div class="legend-line" style="background:#ffd700"></div>Slow SMA (20)</div>
+        <div class="legend-item"><div class="legend-box" style="background:#00ff88;opacity:.8"></div>Bullish candle</div>
+        <div class="legend-item"><div class="legend-box" style="border:1px solid #ff4466"></div>Bearish candle</div>
+        <div class="live-label"><span class="live-dot" style="width:6px;height:6px"></span>Last candle updates live every 2s</div>
+      </div>
+      <div class="strategy-bar">
+        <button class="btn-strategy" id="btn-strategy" onclick="runStrategy()">▶ RUN STRATEGY ON AAPL</button>
+        <span class="strategy-msg" id="strategy-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ledger + Log -->
+  <div class="bottom-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Execution Ledger</span>
+        <span class="panel-count" id="trade-count">0 trades</span>
+      </div>
+      <div id="ledger-body">
+        <div class="empty">No trades yet — run the strategy to execute your first trade.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span style="display:flex;align-items:center;gap:6px">
+          <span class="live-dot" style="width:6px;height:6px"></span>
+          <span class="panel-title">System Log</span>
+        </span>
+      </div>
+      <div class="log-scroll" id="log-scroll"></div>
+    </div>
+  </div>
+
+  <!-- Strategy Rules + Metrics -->
+  <div class="info-grid">
+    <!-- Rules -->
+    <div class="info-section">
+      <div class="info-title">⚡ Strategy Rules — How The Algorithm Works</div>
+      <div style="border:1px solid #1e2d40;border-radius:3px;padding:12px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:9px;color:#00aaff;font-weight:700;letter-spacing:2px;text-transform:uppercase">The Two Lines On The Chart</div>
+        <div class="sma-item">
+          <div class="sma-line" style="background:#00aaff"></div>
+          <div><div class="sma-label">Fast SMA — Blue Line (5-period)</div><div class="sma-desc">Average of last 5 closing prices. Reacts quickly. Represents <span style="color:#e2e8f0">short-term momentum</span> — what the stock is doing RIGHT NOW.</div></div>
+        </div>
+        <div class="sma-item">
+          <div class="sma-line" style="background:#ffd700"></div>
+          <div><div class="sma-label">Slow SMA — Yellow Line (20-period)</div><div class="sma-desc">Average of last 20 closing prices. Moves slowly, filters noise. Represents the <span style="color:#e2e8f0">medium-term trend</span>.</div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="signal-box" style="background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.2)">
+          <div class="signal-badge" style="background:rgba(0,255,136,.15);color:#00ff88">BUY</div>
+          <div><div class="signal-title">Fast crosses ABOVE Slow</div><div class="signal-desc">Bullish crossover — short-term momentum stronger than trend. Algorithm buys 10 shares, cost deducted from cash balance.</div></div>
+        </div>
+        <div class="signal-box" style="background:rgba(255,68,102,.05);border:1px solid rgba(255,68,102,.2)">
+          <div class="signal-badge" style="background:rgba(255,68,102,.15);color:#ff4466">SELL</div>
+          <div><div class="signal-title">Fast crosses BELOW Slow</div><div class="signal-desc">Bearish crossover — momentum fading. Algorithm sells 10 shares, adds proceeds to cash, calculates PnL.</div></div>
+        </div>
+        <div class="signal-box" style="background:rgba(255,215,0,.05);border:1px solid rgba(255,215,0,.2)">
+          <div class="signal-badge" style="background:rgba(255,215,0,.15);color:#ffd700">HOLD</div>
+          <div><div class="signal-title">No crossover on latest bar</div><div class="signal-desc">Relationship unchanged — no trade executed. Algorithm only fires at the exact moment of a crossover, never continuously.</div></div>
+        </div>
+      </div>
+      <div class="tip">💡 Uses pandas <span style="color:#e2e8f0">.diff()</span> on crossover position — fires only at the <span style="color:#e2e8f0">exact bar the relationship changes</span>, preventing over-trading.</div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="info-section">
+      <div class="info-title">$ Dashboard Metrics — What Each Number Means</div>
+      <div class="metric-box" style="border-color:rgba(0,170,255,.2);background:rgba(0,170,255,.05)">
+        <div class="metric-head"><div class="metric-dot" style="background:#00aaff"></div><span class="metric-label" style="color:#00aaff">Cash Balance</span><span class="metric-tag">starts at $10,000</span></div>
+        <div class="metric-desc">Your liquid money not invested in any stock. Goes DOWN on BUY (spent on shares), UP on SELL (cash received). Like your bank account balance.</div>
+      </div>
+      <div class="metric-box" style="border-color:rgba(0,255,136,.2);background:rgba(0,255,136,.05)">
+        <div class="metric-head"><div class="metric-dot" style="background:#00ff88"></div><span class="metric-label" style="color:#00ff88">Portfolio Value</span><span class="metric-tag">Cash + Shares × Price</span></div>
+        <div class="metric-desc">Total net worth = Cash Balance + current market value of all shares held. Fluctuates with stock price even without trading.</div>
+      </div>
+      <div class="metric-box" style="border-color:rgba(255,215,0,.2);background:rgba(255,215,0,.05)">
+        <div class="metric-head"><div class="metric-dot" style="background:#ffd700"></div><span class="metric-label" style="color:#ffd700">Total PnL (Profit & Loss)</span><span class="metric-tag">Portfolio − $10,000</span></div>
+        <div class="metric-desc">The bottom line — how much you've made or lost vs your $10,000 start. Green = profitable, Red = losing. Per-trade PnL = (sell − buy) × shares.</div>
+      </div>
+      <div class="tip">💡 Strategy profits by <span style="color:#00ff88">BUYing on upward crossovers</span> and <span style="color:#ff4466">SELLing on downward ones</span>. Won't be right every trade — but statistically beats random over many trades.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = '%%API_URL%%';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let activeTicker = 'AAPL';
+let activePeriod = '3mo';
+let quotes       = [];
+let chartBars    = [];
+let lastSignal   = null;
+let livePrice    = null;
+let prevPrice    = null;
+let wsRef        = null;
+let wsRetry      = 1000;
+let wsDead       = false;
+let tvChart      = null;
+let candleSeries = null;
+let fastSeries   = null;
+let slowSeries   = null;
+let lastBar      = null;
+let searchTimer  = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const $f = v => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v);
+const tf = s => new Date(s).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const el = id => document.getElementById(id);
+
+function addLog(msg, type='muted') {
+  const ts  = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const div = document.createElement('div');
+  div.className = `log-entry log-${type}`;
+  div.textContent = `[${ts}] ${msg}`;
+  const scroll = el('log-scroll');
+  scroll.insertBefore(div, scroll.firstChild);
+  if (scroll.children.length > 60) scroll.lastChild.remove();
+}
+
+function showError(msg) {
+  el('error-msg').textContent = msg;
+  el('error-banner').classList.remove('hidden');
+}
+function hideError() { el('error-banner').classList.add('hidden'); }
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
+function initChart() {
+  const container = el('chart-container');
+  container.innerHTML = '';
+  if (tvChart) { try { tvChart.remove(); } catch(e){} }
+
+  tvChart = LightweightCharts.createChart(container, {
+    width:  container.clientWidth,
+    height: 400,
+    layout: { background:{color:'#111827'}, textColor:'#4a5568' },
+    grid: {
+      vertLines: { color:'#1a2535', style:LightweightCharts.LineStyle.Dotted },
+      horzLines: { color:'#1a2535', style:LightweightCharts.LineStyle.Dotted },
+    },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor:'#1e2d40', textColor:'#4a5568' },
+    timeScale: { borderColor:'#1e2d40', timeVisible:true, secondsVisible:false },
+    handleScroll: true,
+    handleScale:  true,
+  });
+
+  new ResizeObserver(() => {
+    if (tvChart) tvChart.applyOptions({width: container.clientWidth});
+  }).observe(container);
+
+  candleSeries = tvChart.addCandlestickSeries({
+    upColor:'#00ff88', downColor:'#ff4466',
+    borderUpColor:'#00ff88', borderDownColor:'#ff4466',
+    wickUpColor:'#00ff88', wickDownColor:'#ff4466',
+  });
+  fastSeries = tvChart.addLineSeries({
+    color:'#00aaff', lineWidth:2, title:'Fast SMA (5)',
+    priceLineVisible:false, lastValueVisible:true,
+  });
+  slowSeries = tvChart.addLineSeries({
+    color:'#ffd700', lineWidth:2, title:'Slow SMA (20)',
+    priceLineVisible:false, lastValueVisible:true,
+  });
+}
+
+function setChartData(bars) {
+  if (!candleSeries) return;
+  candleSeries.setData(bars.map(b=>({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close})));
+  fastSeries.setData(bars.filter(b=>b.fast_sma!==null).map(b=>({time:b.time,value:b.fast_sma})));
+  slowSeries.setData(bars.filter(b=>b.slow_sma!==null).map(b=>({time:b.time,value:b.slow_sma})));
+  tvChart.timeScale().fitContent();
+  lastBar = bars[bars.length-1] || null;
+}
+
+function patchLastCandle(price) {
+  if (!candleSeries || !lastBar) return;
+  candleSeries.update({
+    time:  lastBar.time,
+    open:  lastBar.open,
+    high:  Math.max(lastBar.high, price),
+    low:   Math.min(lastBar.low,  price),
+    close: price,
+  });
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  if (wsDead) return;
+  const base = API.replace(/^http/,'ws');
+  const url  = `${base}/ws/price/${activeTicker}`;
+  let ws;
+  try { ws = new WebSocket(url); } catch(e) { scheduleWS(); return; }
+  wsRef = ws;
+
+  ws.onopen = () => {
+    wsRetry = 1000;
+    addLog(`WS connected: ${activeTicker}`, 'info');
+  };
+  ws.onmessage = e => {
+    try {
+      const tick = JSON.parse(e.data);
+      if (!tick.price) return;
+      const p = tick.price;
+
+      // Flash card
+      const card = el('card-live');
+      if (prevPrice !== null) {
+        card.classList.remove('flash-g','flash-r');
+        void card.offsetWidth;
+        card.classList.add(p > prevPrice ? 'flash-g' : 'flash-r');
+      }
+
+      // Update live card
+      el('card-live-val').textContent = `$${p.toFixed(2)}`;
+      el('card-live-label').textContent = `Live · ${activeTicker}`;
+
+      // Update chart price
+      el('ct-price').textContent = `$${p.toFixed(2)}`;
+      el('ct-price').style.color = prevPrice===null ? '#e2e8f0' : p > prevPrice ? '#00ff88' : p < prevPrice ? '#ff4466' : '#e2e8f0';
+
+      // Patch candle
+      patchLastCandle(p);
+
+      prevPrice = p;
+      livePrice = p;
+    } catch(e){}
+  };
+  ws.onerror = () => { try{ws.close();}catch(e){} };
+  ws.onclose = () => { if(!wsDead) scheduleWS(); };
+}
+
+function scheduleWS() {
+  const d = Math.min(wsRetry, 30000);
+  wsRetry = d * 2;
+  addLog(`WS reconnect in ${(d/1000).toFixed(0)}s…`, 'muted');
+  setTimeout(connectWS, d);
+}
+
+function startWS() {
+  wsDead = false; wsRetry = 1000;
+  if (wsRef) { try{wsRef.close();}catch(e){} }
+  connectWS();
+}
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+async function fetchAccount() {
+  const r = await fetch(`${API}/api/v1/account`);
+  if (!r.ok) throw new Error('Account fetch failed');
+  return r.json();
+}
+
+async function fetchTrades() {
+  const r = await fetch(`${API}/api/v1/trades`);
+  if (!r.ok) throw new Error('Trades fetch failed');
+  return r.json();
+}
+
+async function fetchQuotes(q='') {
+  const r = await fetch(`${API}/api/v1/quotes?q=${encodeURIComponent(q)}`);
+  if (!r.ok) return;
+  quotes = await r.json();
+  renderStockList();
+  renderTape();
+}
+
+async function loadChart(ticker, period) {
+  el('ct-spinner').classList.remove('hidden');
+  el('chart-container').style.opacity = '0.4';
+  try {
+    const r = await fetch(`${API}/api/v1/chart/${ticker}?period=${period}`);
+    if (!r.ok) throw new Error('Chart error');
+    const d = await r.json();
+    chartBars = d.bars;
+    initChart();
+    setChartData(d.bars);
+    el('ct-ticker').textContent = ticker;
+    el('ct-name').textContent   = d.company_name;
+    el('ct-sim').classList.toggle('hidden', !d.is_simulated);
+    el('btn-strategy').textContent = `▶ RUN STRATEGY ON ${ticker}`;
+    el('header-info').textContent  = `${ticker} · SMA 5/20 · ${period}`;
+    el('card-live-label').textContent = `Live · ${ticker}`;
+    const chgColor = d.change_pct >= 0 ? '#00ff88' : '#ff4466';
+    el('ct-chg').textContent = `${d.change_pct >= 0 ? '▲' : '▼'} ${Math.abs(d.change_pct).toFixed(2)}%`;
+    el('ct-chg').style.color = chgColor;
+    el('ct-price').textContent = `$${d.current_price.toFixed(2)}`;
+    el('card-live-val').textContent = `$${d.current_price.toFixed(2)}`;
+    addLog(`${ticker} chart loaded (${period}) — ${d.bars.length} bars${d.is_simulated?' [sim]':''}`, 'info');
+  } catch(e) {
+    addLog(`Chart error: ${e.message}`, 'error');
+  } finally {
+    el('ct-spinner').classList.add('hidden');
+    el('chart-container').style.opacity = '1';
+  }
+}
+
+// ── Render functions ──────────────────────────────────────────────────────────
+function renderStockList(filter='') {
+  const scroll = el('stock-scroll');
+  const filtered = filter
+    ? quotes.filter(q => q.ticker.includes(filter.toUpperCase()) || q.name.toLowerCase().includes(filter.toLowerCase()))
+    : quotes;
+
+  if (!filtered.length) {
+    scroll.innerHTML = '<div class="empty">No results found.</div>';
+    return;
+  }
+
+  scroll.innerHTML = filtered.map(q => `
+    <button class="stock-item${q.ticker===activeTicker?' active':''}" onclick="selectStock('${q.ticker}')">
+      <div>
+        <div class="stock-ticker">${q.ticker}</div>
+        <div class="stock-name">${q.name}</div>
+      </div>
+      <div>
+        <div class="stock-price ${q.change_pct>=0?'up':'down'}">$${q.price.toFixed(2)}</div>
+        <div class="stock-chg ${q.change_pct>=0?'up':'down'}">${q.change_pct>=0?'+':''}${q.change_pct.toFixed(2)}%</div>
+      </div>
+    </button>
+  `).join('');
+}
+
+function renderTape() {
+  const items = [...quotes, ...quotes].map(q => `
+    <span class="tape-item">
+      <span style="color:#00aaff;font-weight:700">${q.ticker}</span>
+      <span>$${q.price.toFixed(2)}</span>
+      <span class="${q.change_pct>=0?'up':'down'}">${q.change_pct>=0?'▲':'▼'}${Math.abs(q.change_pct).toFixed(2)}%</span>
+      <span style="color:#1e2d40;margin-left:4px">·</span>
+    </span>
+  `).join('');
+  el('tape').innerHTML = `<div class="tape-inner">${items}</div>`;
+}
+
+function renderAccount(a) {
+  el('card-cash').textContent      = $f(a.cash_balance);
+  el('card-portfolio').textContent = $f(a.portfolio_value);
+  el('card-shares').textContent    = `${a.shares_held} shares held`;
+  el('card-pnl-val').textContent   = $f(a.total_pnl);
+  const pos = a.total_pnl >= 0;
+  el('card-pnl-val').style.color   = pos ? '#00ff88' : '#ff4466';
+  el('card-pnl').style.borderLeftColor = pos ? '#00ff88' : '#ff4466';
+}
+
+function renderTrades(trades) {
+  el('trade-count').textContent = `${trades.length} trades`;
+  if (!trades.length) {
+    el('ledger-body').innerHTML = '<div class="empty">No trades yet — run the strategy to execute your first trade.</div>';
+    return;
+  }
+  el('ledger-body').innerHTML = `
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>Time</th><th>Ticker</th><th>Side</th>
+        <th class="r">Price</th><th class="r">Shares</th>
+        <th class="r">PnL</th><th class="r">Cash After</th>
+      </tr></thead>
+      <tbody>
+        ${trades.map(t=>`
+          <tr>
+            <td class="muted">${tf(t.executed_at)}</td>
+            <td style="color:#00aaff;font-weight:700">${t.ticker}</td>
+            <td><span class="badge badge-${t.action.toLowerCase()}">${t.action}</span></td>
+            <td class="r">${$f(t.price)}</td>
+            <td class="r">${t.shares}</td>
+            <td class="r ${t.pnl===null?'muted':t.pnl>=0?'pnl-pos':'pnl-neg'}">${t.pnl!==null?$f(t.pnl):'—'}</td>
+            <td class="r muted">${$f(t.cash_after)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+async function selectStock(ticker) {
+  activeTicker = ticker;
+  prevPrice    = null;
+  renderStockList(el('search-input').value);
+  startWS();
+  await loadChart(ticker, activePeriod);
+}
+
+async function setPeriod(period, btn) {
+  activePeriod = period;
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  await loadChart(activeTicker, activePeriod);
+}
+
+async function runStrategy() {
+  const btn = el('btn-strategy');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> EVALUATING…';
+  el('strategy-msg').textContent = '';
+  hideError();
+  addLog(`Running strategy on ${activeTicker}…`);
+
+  try {
+    const r = await fetch(`${API}/api/v1/run-strategy?ticker=${activeTicker}`,{method:'POST'});
+    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'Strategy failed'); }
+    const res = await r.json();
+
+    lastSignal = res.signal;
+    renderAccount(res.account);
+    el('strategy-msg').textContent = res.message;
+
+    // Signal badge
+    const sigEl = el('sig-display');
+    sigEl.className = `sig-badge sig-${res.signal.toLowerCase()}`;
+    sigEl.innerHTML = `<span class="sig-dot"></span>${res.signal}`;
+    sigEl.classList.remove('hidden');
+
+    addLog(`Signal: ${res.signal} | ${activeTicker} @ ${$f(res.current_price)}`, res.signal==='HOLD'?'muted':'success');
+    if (res.trade) addLog(`${res.trade.action} executed — ${res.trade.shares} shares @ ${$f(res.trade.price)}`, 'success');
+
+    const trades = await fetchTrades();
+    renderTrades(trades);
+    await loadChart(activeTicker, activePeriod);
+  } catch(e) {
+    showError(e.message);
+    addLog(`ERROR: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = `▶ RUN STRATEGY ON ${activeTicker}`;
+  }
+}
+
+async function resetAccount() {
+  if (!confirm('Reset account to $10,000 and clear all trades?')) return;
+  await fetch(`${API}/api/v1/reset-account`,{method:'POST'});
+  const [a,t] = await Promise.all([fetchAccount(),fetchTrades()]);
+  renderAccount(a);
+  renderTrades(t);
+  el('sig-display').classList.add('hidden');
+  addLog('Account reset to $10,000.', 'success');
+}
+
+function onSearch(val) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(()=>{
+    if (val.length > 0) {
+      renderStockList(val);
+    } else {
+      fetchQuotes('');
+    }
+  }, 300);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async function boot() {
+  addLog('Connecting to AlgoTrader engine…');
+  initChart();
+  try {
+    const [account, trades] = await Promise.all([fetchAccount(), fetchTrades()]);
+    renderAccount(account);
+    renderTrades(trades);
+    addLog(`Engine online — ${$f(account.cash_balance)}`, 'success');
+    await Promise.all([loadChart('AAPL','3mo'), fetchQuotes('')]);
+    startWS();
+    // Refresh quotes every 30s
+    setInterval(()=>fetchQuotes(el('search-input').value||''), 30000);
+  } catch(e) {
+    showError(e.message);
+    addLog(`ERROR: ${e.message}`, 'error');
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,4 @@
 services:
-  # ── Backend: FastAPI + WebSocket ──────────────────────────────────────────
   - type: web
     name: algotrader-api
     runtime: python
@@ -14,20 +13,18 @@ services:
       - key: PYTHON_VERSION
         value: "3.11.4"
 
-  # ── Frontend: Next.js Static Site ────────────────────────────────────────
   - type: web
     name: algotrader-frontend
     runtime: static
     region: oregon
     plan: free
     rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: out
+    buildCommand: bash build.sh
+    staticPublishPath: .
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: REPLACE_WITH_BACKEND_URL  # e.g. https://algotrader-api.onrender.com
+        value: REPLACE_WITH_BACKEND_URL
 
-  # ── PostgreSQL ─────────────────────────────────────────────────────────────
   - type: pserv
     name: algotrader-db
     runtime: postgres

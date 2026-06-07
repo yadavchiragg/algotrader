@@ -1,135 +1,75 @@
 # AlgoTrader — Real-Time Algorithmic Trading Dashboard
 
-> A production-grade, event-driven algorithmic trading engine with live WebSocket price streaming, TradingView Lightweight Charts, and an SMA crossover strategy engine. Built with FastAPI + Next.js. Deployed on Render.
-
-![AlgoTrader Dashboard](https://img.shields.io/badge/status-live-00ff88?style=flat-square&labelColor=0a0e17)
-![Python](https://img.shields.io/badge/python-3.11-00aaff?style=flat-square&labelColor=0a0e17)
-![Next.js](https://img.shields.io/badge/next.js-14-ffffff?style=flat-square&labelColor=0a0e17)
-![FastAPI](https://img.shields.io/badge/fastapi-0.115-00ff88?style=flat-square&labelColor=0a0e17)
-![License](https://img.shields.io/badge/license-MIT-ffd700?style=flat-square&labelColor=0a0e17)
+> A production-grade, event-driven algorithmic trading engine with live WebSocket price streaming, TradingView Lightweight Charts, and an SMA crossover strategy — deployed entirely on Render (free tier).
 
 ---
 
-## What This Is
+## Exact Project Structure
 
-AlgoTrader is a full-stack portfolio project that simulates a real algorithmic trading system. It:
+```
+algotrader/                         ← your GitHub repo root
+│
+├── .python-version                 ← tells Render to use Python 3.11.4
+├── render.yaml                     ← Render infrastructure config
+├── README.md                       ← this file
+│
+├── backend/                        ← FastAPI backend (Render Web Service)
+│   ├── main.py                     ← entire backend: API + WebSocket + DB + strategy
+│   └── requirements.txt            ← Python dependencies
+│
+└── frontend/                       ← static frontend (Render Static Site)
+    ├── index.html                  ← entire dashboard: HTML + CSS + JS in one file
+    └── build.sh                    ← injects API URL into index.html at deploy time
+```
 
-- Fetches live stock data from Yahoo Finance via `yfinance`
-- Computes **Fast SMA (5-period)** and **Slow SMA (20-period)** using pandas
-- Detects crossover signals using `pandas .diff()` — the industry-standard technique
-- Executes mock BUY/SELL trades on a $10,000 simulated account stored in PostgreSQL
-- Streams live price ticks via WebSocket every 2 seconds to the frontend
-- Renders a real-time candlestick chart with SMA overlays using TradingView Lightweight Charts
-- Falls back to geometric Brownian motion simulation when markets are closed
-
----
-
-## Live Demo
-
-| Service | URL |
-|---------|-----|
-| Frontend | `https://algotrader-frontend.onrender.com` |
-| Backend API | `https://algotrader-api.onrender.com` |
-| API Docs | `https://algotrader-api.onrender.com/docs` |
-
-> **Note:** Render free tier spins down after 15 minutes of inactivity. First load may take 30–60 seconds to wake up.
+**That's it. 6 files total. No Node.js. No npm. No build pipeline.**
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Render Free Tier                          │
-│                                                             │
-│  ┌──────────────────────┐    ┌─────────────────────────┐   │
-│  │  Static Site         │    │  Web Service             │   │
-│  │  (Next.js frontend)  │    │  (FastAPI backend)       │   │
-│  │                      │    │                          │   │
-│  │  - TradingView Charts│◄──►│  REST API  /api/v1/*     │   │
-│  │  - WebSocket client  │    │  WebSocket /ws/price/*   │   │
-│  │  - Tailwind CSS UI   │    │  SQLAlchemy ORM          │   │
-│  │  - Exponential retry │    │  yfinance + simulation   │   │
-│  └──────────────────────┘    └────────────┬────────────┘   │
-│                                            │                 │
-│                               ┌────────────▼────────────┐   │
-│                               │  PostgreSQL Database     │   │
-│                               │  accounts + trades       │   │
-│                               └─────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                                │
-                    ┌───────────▼────────────┐
-                    │   Yahoo Finance API     │
-                    │   (yfinance library)    │
-                    │   Live during market    │
-                    │   hours, sim otherwise  │
-                    └────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        Render Free Tier                          │
+│                                                                  │
+│   ┌──────────────────────┐      ┌──────────────────────────┐   │
+│   │   Static Site         │      │   Web Service             │   │
+│   │   algotrader-frontend │      │   algotrader-api          │   │
+│   │                       │      │                           │   │
+│   │  index.html           │◄────►│  FastAPI (uvicorn)        │   │
+│   │  - TradingView Charts │      │  REST  → /api/v1/*        │   │
+│   │  - WebSocket client   │      │  WS    → /ws/price/*      │   │
+│   │  - Vanilla JS/CSS     │      │  SQLAlchemy ORM           │   │
+│   │  - Exp. backoff retry │      │  yfinance + GBM sim       │   │
+│   └──────────────────────┘      └────────────┬─────────────┘   │
+│                                               │                  │
+│                                  ┌────────────▼─────────────┐   │
+│                                  │   PostgreSQL Database     │   │
+│                                  │   accounts + trades       │   │
+│                                  └──────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                                               │
+                                  ┌────────────▼─────────────┐
+                                  │   Yahoo Finance API       │
+                                  │   Live market hours only  │
+                                  │   GBM simulation fallback │
+                                  └──────────────────────────┘
 ```
 
 ---
 
 ## Tech Stack
 
-### Backend
-| Technology | Purpose |
-|-----------|---------|
-| **FastAPI** | REST API framework + WebSocket server |
-| **SQLAlchemy** | ORM — works with SQLite locally, PostgreSQL on Render |
-| **psycopg2** | PostgreSQL driver |
-| **pandas** | SMA calculation + crossover signal detection |
-| **yfinance** | Yahoo Finance data fetcher |
-| **uvicorn** | ASGI server |
-| **pydantic** | Request/response validation and serialisation |
-
-### Frontend
-| Technology | Purpose |
-|-----------|---------|
-| **Next.js 14** | React framework (static export mode) |
-| **TypeScript** | Type safety |
-| **Tailwind CSS** | Utility-first styling |
-| **Lightweight Charts** | TradingView's charting library for candlesticks + SMA lines |
-| **WebSocket API** | Native browser WebSocket with exponential backoff reconnect |
-
-### Infrastructure
-| Technology | Purpose |
-|-----------|---------|
-| **Render Web Service** | Hosts the FastAPI backend |
-| **Render Static Site** | Hosts the Next.js static export |
-| **Render PostgreSQL** | Managed Postgres database (free tier) |
-
----
-
-## Project Structure
-
-```
-algotrader/
-│
-├── .python-version          ← pins Python 3.11.4 for Render
-├── render.yaml              ← Render infrastructure as code
-├── README.md
-│
-├── backend/
-│   ├── main.py              ← entire FastAPI application
-│   │   ├── ORM models       (Account, Trade)
-│   │   ├── WebSocket manager
-│   │   ├── yfinance fetcher + GBM simulation fallback
-│   │   ├── SMA signal engine
-│   │   └── REST endpoints + WebSocket endpoint
-│   └── requirements.txt
-│
-└── frontend/
-    ├── src/
-    │   ├── app/
-    │   │   ├── page.tsx     ← main dashboard (all UI logic)
-    │   │   ├── layout.tsx   ← root HTML shell
-    │   │   └── globals.css  ← terminal aesthetic + animations
-    │   └── components/
-    │       └── TradingChart.tsx  ← TradingView chart + WS connection
-    ├── next.config.js       ← static export config
-    ├── package.json
-    ├── tailwind.config.js
-    └── tsconfig.json
-```
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Backend framework | FastAPI | Async, fast, native WebSocket support |
+| Database ORM | SQLAlchemy | Works with SQLite locally + PostgreSQL on Render |
+| DB driver | psycopg2-binary | PostgreSQL connector |
+| Data | pandas + yfinance | SMA calculation + Yahoo Finance OHLCV |
+| Server | uvicorn | ASGI server, required for async FastAPI |
+| Frontend | Vanilla HTML/CSS/JS | Zero build step — no CSS loading bugs |
+| Charts | TradingView Lightweight Charts (CDN) | Industry-standard candlestick + SMA rendering |
+| Hosting | Render (free tier) | Static Site + Web Service + PostgreSQL |
 
 ---
 
@@ -139,156 +79,185 @@ algotrader/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/health` | Health check |
-| `GET` | `/api/v1/account` | Current balance, shares held, portfolio value, PnL |
-| `GET` | `/api/v1/trades` | All executed trades (newest first) |
-| `GET` | `/api/v1/chart/{ticker}` | OHLCV bars + precomputed SMA values |
-| `GET` | `/api/v1/quotes` | Live quotes for all 30 stocks |
-| `POST` | `/api/v1/run-strategy` | Execute SMA crossover strategy on a ticker |
-| `POST` | `/api/v1/reset-account` | Reset account to $10,000, clear trades |
+| `GET` | `/api/health` | Health check — returns `{"status":"ok"}` |
+| `GET` | `/api/v1/account` | Cash balance, shares held, portfolio value, PnL |
+| `GET` | `/api/v1/trades` | All executed trades, newest first |
+| `GET` | `/api/v1/chart/{ticker}?period=3mo` | OHLCV bars + precomputed Fast/Slow SMA |
+| `GET` | `/api/v1/quotes?q=` | Live quotes for all 30 stocks |
+| `POST` | `/api/v1/run-strategy?ticker=AAPL` | Execute SMA crossover — returns BUY/SELL/HOLD |
+| `POST` | `/api/v1/reset-account` | Reset to $10,000, wipe trade history |
 
 ### WebSocket
 
 ```
-ws://your-api.onrender.com/ws/price/{TICKER}
+wss://algotrader-api.onrender.com/ws/price/AAPL
 ```
 
-Pushes a JSON message every 2 seconds:
+Pushes every 2 seconds:
 ```json
 {
   "ticker": "AAPL",
   "price": 213.45,
-  "timestamp": "2025-01-15T14:32:01.234Z"
+  "timestamp": "2025-06-05T14:32:01.234Z"
 }
 ```
 
 ---
 
-## The Strategy — SMA Crossover Explained
+## The Strategy — SMA Crossover
 
-### What are the two lines?
+### Two lines on the chart
 
-**Fast SMA (blue line, 5-period)**
-Rolling mean of the last 5 closing prices. Reacts quickly to price changes — represents short-term momentum.
+| Line | Period | Color | Meaning |
+|------|--------|-------|---------|
+| Fast SMA | 5 bars | Blue | Short-term momentum — reacts quickly |
+| Slow SMA | 20 bars | Yellow | Medium-term trend — moves slowly |
 
-**Slow SMA (yellow line, 20-period)**
-Rolling mean of the last 20 closing prices. Moves slowly, filters out noise — represents the medium-term trend.
-
-### The pandas implementation
+### The pandas code
 
 ```python
+# Compute both SMAs
 df["fast_sma"] = df["Close"].rolling(window=5).mean()
 df["slow_sma"] = df["Close"].rolling(window=20).mean()
 
-# Regime: 1 = fast above slow (bullish), 0 = fast below slow (bearish)
+# Regime: 1 = fast above slow (bullish), 0 = bearish
 df["position"] = (df["fast_sma"] > df["slow_sma"]).astype(int)
 
-# Signal: fires ONLY at the exact bar the relationship changes
-# +1.0 = bullish crossover (BUY)
-# -1.0 = bearish crossover (SELL)
-#  0.0 = no change (HOLD)
+# Signal fires ONLY when relationship CHANGES
+# +1.0 = BUY (bullish crossover)
+# -1.0 = SELL (bearish crossover)
+#  0.0 = HOLD (no change)
 df["signal"] = df["position"].diff()
 ```
 
-### Why `.diff()` is the key insight
+### Why `.diff()` is the key
 
-Without `.diff()`, you would get a BUY signal on every single bar where fast > slow — that's over-trading. The `.diff()` call computes the change between consecutive rows, so it produces a non-zero value **only at the exact bar the relationship flips**. This is the standard quant technique for detecting crossovers in pandas.
+Without `.diff()`, you'd get a signal on every single bar where fast > slow — massively over-trading. `.diff()` produces a non-zero value **only at the exact bar the relationship flips**. That's the industry-standard crossover detection technique.
 
 ### The three signals
 
-| Signal | Condition | Action |
-|--------|-----------|--------|
-| **BUY** | Fast SMA crosses **above** Slow SMA | Buy 10 shares, deduct cost from cash |
-| **SELL** | Fast SMA crosses **below** Slow SMA | Sell 10 shares, add proceeds to cash, log PnL |
-| **HOLD** | No crossover on latest bar | Do nothing |
-
----
-
-## WebSocket — Exponential Backoff
-
-Render's free tier occasionally drops connections during sleep/wake cycles. The frontend (`TradingChart.tsx`) implements proper reconnection:
-
-```
-Connect attempt 1 → success → reset delay to 1s
-Connect attempt 1 → fail    → wait 1s
-Connect attempt 2 → fail    → wait 2s
-Connect attempt 3 → fail    → wait 4s
-Connect attempt 4 → fail    → wait 8s
-Connect attempt 5 → fail    → wait 16s
-...capped at 30s between attempts...
-Connect attempt N → success → reset delay to 1s ✓
-```
-
-This handles cold starts silently without flooding the server or freezing the chart permanently.
+| Signal | Condition | What happens |
+|--------|-----------|--------------|
+| **BUY** | Fast crosses **above** Slow | Buy 10 shares, deduct cost from cash |
+| **SELL** | Fast crosses **below** Slow | Sell 10 shares, add proceeds, calculate PnL |
+| **HOLD** | No crossover | Nothing — algorithm stays silent |
 
 ---
 
 ## Data Sources
 
-| Condition | Data Source | Notes |
-|-----------|------------|-------|
-| Market hours (Mon–Fri 9:30–16:00 ET) | Yahoo Finance via `yfinance` | Real prices |
-| After hours / weekends | Geometric Brownian Motion simulation | Realistic random walk using each stock's historical volatility |
-| Yahoo Finance rate limited | GBM simulation fallback | Automatic, no user action needed |
+| When | Source | Notes |
+|------|--------|-------|
+| Mon–Fri 9:30am–4pm ET | Yahoo Finance (live) | Real prices via yfinance |
+| Weekends / after hours | Geometric Brownian Motion | Math simulation using each stock's real historical volatility |
+| Yahoo Finance rate-limited | GBM fallback (auto) | No user action needed |
 
-A **SIM** badge appears on the chart header when simulated data is being used.
+**SIM** badge shows on chart when simulated data is in use. The simulation uses the same stochastic process as the Black-Scholes options pricing model, so volatility looks realistic per stock (NVDA moves more than KO, etc.).
 
 ---
 
-## Deploying to Render
+## WebSocket Reconnect — Exponential Backoff
 
-### Step 1 — Push to GitHub
-```bash
-git init
-git add .
-git commit -m "AlgoTrader v5"
-git remote add origin https://github.com/YOUR_USERNAME/algotrader.git
-git push -u origin main
+Render free tier drops connections on sleep/wake. The frontend handles this silently:
+
+```
+Connect → success            → reset delay to 1s ✓
+Connect → fail → wait  1s
+Connect → fail → wait  2s
+Connect → fail → wait  4s
+Connect → fail → wait  8s
+Connect → fail → wait 16s
+Connect → fail → wait 30s  (capped)
+...
+Connect → success            → reset delay to 1s ✓
 ```
 
-### Step 2 — Create PostgreSQL Database
-1. Render Dashboard → **New +** → **PostgreSQL**
-2. Name: `algotrader-db` | Region: `Oregon` | Plan: `Free`
-3. Click **Create Database**
-4. Copy the **Internal Database URL**
+---
 
-### Step 3 — Create Backend Web Service
-1. **New +** → **Web Service** → connect your repo
-2. Settings:
+## Deploying to Render — Step by Step
+
+### Prerequisites
+- GitHub account with this repo pushed
+- Render account (free at render.com)
+
+---
+
+### Step 1 — Create PostgreSQL Database
+
+1. Render Dashboard → **New +** → **PostgreSQL**
+2. Fill in:
+   - Name: `algotrader-db`
+   - Region: `Oregon (US West)`
+   - Plan: `Free`
+3. Click **Create Database**
+4. Wait ~1 minute
+5. Go to **Connections** section → copy **Internal Database URL**
+   - Looks like: `postgresql://user:pass@dpg-xxxx.oregon-postgres.render.com/algotrader_db`
+   - **Save this — you need it in Step 2**
+
+---
+
+### Step 2 — Create Backend Web Service
+
+1. Render Dashboard → **New +** → **Web Service**
+2. Connect your GitHub repo
+3. Fill in:
 
 | Field | Value |
 |-------|-------|
-| Root Directory | `backend` |
+| Name | `algotrader-api` |
+| Region | `Oregon (US West)` ← must match database |
 | Runtime | `Python 3` |
+| Root Directory | `backend` |
 | Build Command | `pip install -r requirements.txt` |
 | Start Command | `uvicorn main:app --host 0.0.0.0 --port $PORT` |
-| Plan | Free |
+| Plan | `Free` |
 
-3. Environment Variables:
+4. Add Environment Variables:
 
 | Key | Value |
 |-----|-------|
-| `DATABASE_URL` | your PostgreSQL Internal URL |
+| `DATABASE_URL` | paste Internal Database URL from Step 1 |
 | `PYTHON_VERSION` | `3.11.4` |
 
-### Step 4 — Create Frontend Static Site
-1. **New +** → **Static Site** → connect your repo
-2. Settings:
+5. Click **Create Web Service**
+6. Wait for build — watch logs for `Application startup complete`
+7. Copy your backend URL: `https://algotrader-api.onrender.com`
+
+---
+
+### Step 3 — Create Frontend Static Site
+
+1. Render Dashboard → **New +** → **Static Site**
+2. Connect same GitHub repo
+3. Fill in:
 
 | Field | Value |
 |-------|-------|
+| Name | `algotrader-frontend` |
+| Region | `Oregon (US West)` |
 | Root Directory | `frontend` |
-| Build Command | `npm install && npm run build` |
-| Publish Directory | `out` |
+| Build Command | `bash build.sh` |
+| Publish Directory | `.` |
 
-3. Environment Variables:
+4. Add Environment Variable:
 
 | Key | Value |
 |-----|-------|
-| `NEXT_PUBLIC_API_URL` | your backend URL (e.g. `https://algotrader-api.onrender.com`) |
+| `NEXT_PUBLIC_API_URL` | `https://algotrader-api.onrender.com` (your backend URL from Step 2) |
 
-### Step 5 — Deploy
-Both services build in ~3–5 minutes. Your app is live at the Static Site URL.
+5. Click **Create Static Site**
+6. Wait for build → your app is live
+
+---
+
+### Step 4 — Verify
+
+Open your frontend URL. Then test backend directly:
+```
+https://algotrader-api.onrender.com/api/health
+```
+Should return: `{"status":"ok","version":"5.0.0"}`
 
 ---
 
@@ -298,40 +267,50 @@ Both services build in ~3–5 minutes. Your app is live at the Static Site URL.
 ```bash
 cd backend
 python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
 echo "DATABASE_URL=sqlite:///./trading.db" > .env
 python3 -m uvicorn main:app --reload --port 8000
+# API docs at: http://localhost:8000/docs
 ```
-API docs: http://localhost:8000/docs
 
 ### Frontend
 ```bash
 cd frontend
-npm install
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
-npm run dev
+# Set your local backend URL
+export NEXT_PUBLIC_API_URL=http://localhost:8000
+bash build.sh
+# Open index.html in browser — or serve it:
+python3 -m http.server 3000
+# Then visit: http://localhost:3000
 ```
-Dashboard: http://localhost:3000
 
 ---
 
 ## Interview Talking Points
 
-**"Walk me through the system architecture."**
-> The backend is a FastAPI application running on Render's free tier. It exposes a REST API for account data and trade history, a chart endpoint that returns pre-computed OHLCV bars with SMA values, and a WebSocket endpoint that pushes price ticks every 2 seconds. The frontend is a Next.js static export hosted on Render's Static Site service — completely separate from the API, which solves the CSS serving problem you get when trying to proxy static assets through FastAPI.
+**"Walk me through the architecture."**
+> FastAPI backend on Render handles the REST API and WebSocket stream. The frontend is a single HTML file on Render's Static Site service — no framework, no build pipeline, which completely eliminates CSS serving issues you get when proxying static assets through Python. PostgreSQL on Render stores account state and trade history via SQLAlchemy ORM.
 
 **"How does the live chart work?"**
-> TradingView's Lightweight Charts library renders historical candlesticks from the OHLCV data returned by the REST endpoint. Simultaneously, a WebSocket connection to the backend receives a price tick every 2 seconds. I call the chart's `.update()` method with the new close, and update the high and low if the new price exceeds them — so the last candle visually grows in real time exactly like a professional trading terminal.
+> TradingView's Lightweight Charts library loads from CDN and renders historical OHLCV candlesticks. A WebSocket connection to FastAPI receives a price tick every 2 seconds. I call the chart's `.update()` method with the new close price and adjust the high/low if the tick exceeds them — so the last candle grows live exactly like a professional terminal.
 
-**"How do you handle WebSocket drops on Render's free tier?"**
-> Exponential backoff — starting at 1 second, doubling on each failure, capped at 30 seconds, resetting to 1 second on a successful reconnect. This is implemented in a `connectWS` function that schedules itself recursively using `setTimeout`. The `dead` ref flag ensures cleanup on component unmount so we don't leak connections.
+**"How do you handle Render's free tier sleeping?"**
+> Exponential backoff on the WebSocket client — starts at 1 second, doubles on each failure, caps at 30 seconds, resets to 1 second on reconnect. This handles cold starts silently without flooding the server or permanently freezing the chart.
 
 **"Explain the SMA crossover strategy in pandas."**
-> I use `.rolling(n).mean()` to compute both SMAs, then cast the boolean expression `fast_sma > slow_sma` to an integer to create a regime column — 1 for bullish, 0 for bearish. Then I call `.diff()` on the regime column. The diff produces +1 exactly when a bullish crossover fires, -1 on a bearish one, and 0 otherwise. The key insight is that `.diff()` fires only at the exact bar the relationship changes — not on every bar where fast is above slow — which prevents the over-trading problem you'd get with a naive greater-than comparison.
+> I use `.rolling(n).mean()` for both SMAs, cast the boolean `fast > slow` to an integer regime column, then call `.diff()` on it. The diff produces +1 exactly at a bullish crossover and -1 at bearish — firing only once per crossover, not on every bar where fast > slow. That's the key insight: `.diff()` detects the transition, not the state.
 
-**"Why simulate data instead of failing when markets are closed?"**
-> I use geometric Brownian motion — the same stochastic process that underlies the Black-Scholes options pricing model. Each stock has a calibrated volatility parameter so NVDA moves more than KO, for example. This keeps the WebSocket stream and charts fully functional 24/7 for demos, which is critical for a portfolio project where you can't guarantee the interviewer will look at it during NYSE hours.
+**"Why simulate data when markets are closed?"**
+> Geometric Brownian motion — the same stochastic process underlying Black-Scholes options pricing. Each stock has a calibrated volatility parameter so NVDA moves more than KO. This keeps the WebSocket stream and charts fully functional 24/7, which matters for demos when you can't guarantee the interviewer looks during NYSE hours.
+
+---
+
+## 30 Supported Stocks
+
+AAPL · MSFT · GOOGL · AMZN · NVDA · META · TSLA · JPM · V · WMT ·
+JNJ · PG · HD · KO · NFLX · AMD · ADBE · QCOM · INTC · ORCL ·
+CRM · GS · BAC · MA · AVGO · AMGN · TXN · SBUX · IBM · CSCO
 
 ---
 
