@@ -106,11 +106,25 @@ def fetch_history(ticker:str,period:str="3mo") -> tuple:
     return simulate_history(ticker,days),True
 
 def next_tick(ticker:str) -> float:
-    sigma=STOCKS.get(ticker,{}).get("vol",0.018)
-    cur=_prices.get(ticker,STOCKS.get(ticker,{}).get("base",100.0))
-    tick_sigma=sigma*math.sqrt(2/23400)
-    new=max(0.01,round(cur*math.exp(random.gauss(0,tick_sigma)),2))
-    _prices[ticker]=new; return new
+    """
+    Try to get real price from yfinance fast_info.
+    Falls back to GBM simulation — uses higher tick sigma so chart visibly moves.
+    """
+    try:
+        fi    = yf.Ticker(ticker).fast_info
+        price = float(getattr(fi, "last_price", 0) or 0)
+        if price > 0:
+            _prices[ticker] = price
+            return round(price, 2)
+    except Exception:
+        pass
+    # Simulation: GBM with slightly higher vol so movement is visible
+    sigma      = STOCKS.get(ticker, {}).get("vol", 0.018)
+    cur        = _prices.get(ticker, STOCKS.get(ticker, {}).get("base", 100.0))
+    tick_sigma = sigma * math.sqrt(3 / 23400) * 3  # 3x amplified for visibility
+    new        = max(0.01, round(cur * math.exp(random.gauss(0, tick_sigma)), 2))
+    _prices[ticker] = new
+    return new
 
 def get_quote(ticker:str) -> dict:
     try:

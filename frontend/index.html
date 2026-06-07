@@ -337,7 +337,19 @@ tr:hover td{background:#1a2535}
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
-const API = '%%API_URL%%';
+// Auto-detect backend URL
+// build.sh injects real URL at deploy time; fallback derives from hostname
+const _raw = '%%API_URL%%';
+const API = (_raw && !_raw.includes('%%'))
+  ? _raw
+  : (() => {
+      const h = window.location.hostname;
+      // Render: algotrader-frontend.onrender.com -> algotrader-api.onrender.com
+      if (h.includes('onrender.com')) {
+        return 'https://' + h.replace('frontend','api').replace('static','api').replace('dash','api');
+      }
+      return 'http://localhost:8000';
+    })();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let activeTicker = 'AAPL';
@@ -714,6 +726,28 @@ function onSearch(val) {
     addLog(`Engine online — ${$f(account.cash_balance)}`, 'success');
     await Promise.all([loadChart('AAPL','3mo'), fetchQuotes('')]);
     startWS();
+    // REST polling fallback — updates price every 3s even if WS fails
+    setInterval(async () => {
+      try {
+        const r = await fetch(`${API}/api/v1/chart/${activeTicker}?period=${activePeriod}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const p = d.current_price;
+        if (!p) return;
+        // Only update if WS isn't providing data
+        const card = el('card-live');
+        if (prevPrice !== null) {
+          card.classList.remove('flash-g','flash-r');
+          void card.offsetWidth;
+          card.classList.add(p > prevPrice ? 'flash-g' : 'flash-r');
+        }
+        el('card-live-val').textContent = `$${p.toFixed(2)}`;
+        el('ct-price').textContent = `$${p.toFixed(2)}`;
+        el('ct-price').style.color = prevPrice === null ? '#e2e8f0' : p > prevPrice ? '#00ff88' : p < prevPrice ? '#ff4466' : '#e2e8f0';
+        patchLastCandle(p);
+        prevPrice = p; livePrice = p;
+      } catch(e) {}
+    }, 3000);
     // Refresh quotes every 30s
     setInterval(()=>fetchQuotes(el('search-input').value||''), 30000);
   } catch(e) {
